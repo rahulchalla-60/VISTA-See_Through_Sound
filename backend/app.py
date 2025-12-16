@@ -1,4 +1,5 @@
 import cv2
+import pyttsx3
 
 from nodes.camera_node import CameraNode
 from nodes.detection_node import DetectionNode
@@ -13,6 +14,9 @@ def main():
     camera = CameraNode()
     detector = DetectionNode(model="yolov8n.pt", conf=0.5)
     spatial = SpatialAnalysis()
+    
+    # Initialize text-to-speech engine
+    engine = pyttsx3.init()
     
     spoken_ids = set()  # to avoid repeated announcements
 
@@ -40,10 +44,8 @@ def main():
 
             # 🔊 Announce only once per unique object
             if track_id not in spoken_ids:
-                announcement = f"{label} on your {position}"
-                if distance:
-                    announcement += f", distance {distance} units"
-                print(f"SPEAK: {announcement}")
+                engine.say(f"{label} ahead")
+                engine.runAndWait()
                 spoken_ids.add(track_id)
 
             # Draw bounding box and info
@@ -65,8 +67,10 @@ def main():
                 2
             )
 
+        # Show video frame (MOVED OUTSIDE the detection loop)
         cv2.imshow("Vision Assistant - Press 'q' to quit", annotated_frame)
 
+        # Check for quit key (MOVED OUTSIDE the detection loop)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             print("Vision Assistant stopped by user")
             break
