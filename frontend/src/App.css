@@ -1,0 +1,169 @@
+.App {
+  text-align: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.App-header {
+  padding: 40px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+h1 {
+  font-size: 4rem;
+  margin: 0;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+}
+
+h2 {
+  font-size: 1.5rem;
+  margin: 10px 0 40px 0;
+  opacity: 0.9;
+  font-weight: 300;
+}
+
+.status-container {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 40px;
+  padding: 20px 30px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 15px;
+  backdrop-filter: blur(10px);
+}
+
+.status-indicator {
+  font-size: 2rem;
+  animation: pulse 2s infinite;
+}
+
+.status-indicator.running {
+  animation: pulse 1s infinite;
+}
+
+.status-text {
+  font-size: 1.2rem;
+  margin: 0;
+  font-weight: 500;
+}
+
+.main-button {
+  background: linear-gradient(45deg, #4CAF50, #45a049);
+  border: none;
+  border-radius: 25px;
+  color: white;
+  padding: 30px 60px;
+  font-size: 2rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-width: 300px;
+  margin-bottom: 40px;
+}
+
+.main-button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 35px rgba(0,0,0,0.3);
+}
+
+.main-button:active {
+  transform: translateY(-1px);
+}
+
+.main-button.stop {
+  background: linear-gradient(45deg, #f44336, #d32f2f);
+}
+
+.main-button.stop:hover {
+  background: linear-gradient(45deg, #d32f2f, #b71c1c);
+}
+
+.main-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.button-subtitle {
+  font-size: 0.8rem;
+  font-weight: normal;
+  opacity: 0.9;
+}
+
+.spinner {
+  width: 30px;
+  height: 30px;
+  border: 3px solid rgba(255,255,255,0.3);
+  border-top: 3px solid white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.info-section {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 30px;
+  border-radius: 15px;
+  backdrop-filter: blur(10px);
+  max-width: 600px;
+  margin-top: 20px;
+}
+
+.info-section h3 {
+  margin-top: 0;
+  font-size: 1.5rem;
+}
+
+.info-section ul {
+  text-align: left;
+  list-style: none;
+  padding: 0;
+}
+
+.info-section li {
+  padding: 8px 0;
+  font-size: 1.1rem;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@media (max-width: 768px) {
+  h1 {
+    font-size: 3rem;
+  }
+  
+  .main-button {
+    font-size: 1.5rem;
+    padding: 25px 40px;
+    min-width: 250px;
+  }
+  
+  .status-container {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .info-section {
+    margin: 20px;
+    padding: 20px;
+  }
+}
