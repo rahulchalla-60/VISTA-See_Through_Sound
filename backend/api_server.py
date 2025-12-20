@@ -200,7 +200,7 @@ def health_check():
 
 if __name__ == '__main__':
     print("🚀 Starting VISTA API Server")
-    print("🌐 Frontend: http://localhost:3000")
+    print("🌐 Frontend: http://localhost:3001")
     print("🔌 API: http://localhost:5000")
     print("-" * 40)
 

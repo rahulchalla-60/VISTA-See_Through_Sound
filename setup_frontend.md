@@ -20,15 +20,16 @@ npm install
 npm start
 ```
 
-**Frontend will run on:** http://localhost:3000
+**Frontend will run on:** http://localhost:3001
 
 ## 🎯 How to Use
 
 1. **Start both servers:**
+
    - Backend: `python backend/api_server.py`
    - Frontend: `npm start` (in frontend folder)
 
-2. **Open browser:** http://localhost:3000
+2. **Open browser:** http://localhost:3001
 
 3. **Click the big START button** to begin vision assistance
 
@@ -45,6 +46,7 @@ npm start
 ## 🛠️ Troubleshooting
 
 **Frontend won't start:**
+
 ```bash
 cd frontend
 rm -rf node_modules package-lock.json
@@ -53,11 +55,13 @@ npm start
 ```
 
 **Backend API errors:**
+
 ```bash
 pip install flask flask-cors ultralytics opencv-python pyttsx3
 ```
 
 **Camera not working:**
+
 - Check if another app is using your camera
 - Try different camera index in `app.py`
 

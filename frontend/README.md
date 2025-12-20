@@ -24,7 +24,7 @@ Minimal React frontend for the Vision Assistant system.
    ```
 
 3. **Open in browser:**
-   - Frontend: http://localhost:3000
+   - Frontend: http://localhost:3001
    - Make sure backend API is running on http://localhost:5000
 
 ## Usage
