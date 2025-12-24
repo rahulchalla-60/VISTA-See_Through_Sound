@@ -5,138 +5,253 @@ import threading
 from queue import Queue
 
 from nodes.camera_node import CameraNode
-from nodes.detection_node import DetectionNode
-from nodes.spatial_analysis_node import SpatialAnalysis
+from integrated_vision_navigation import IntegratedVisionNavigation
 
-def main():
-    print("Starting Vision Assistant System...")
-    print("Press 'q' to quit")
-    print("-" * 40)
+class VisionAssistant:
+    def __init__(self):
+        # 🧩 NEW: Integrated vision + navigation system
+        self.integrated_system = IntegratedVisionNavigation()
+        self.camera = CameraNode()
+        
+        # Legacy TTS for compatibility
+        self.engine = None
+        self.speech_queue = Queue()
+        self.is_speaking = False
+        self.spoken_ids = set()
+        
+        # Control flags
+        self.running = False
+        self.navigation_active = False
+        
+        self._setup_tts()
+        self._start_speech_worker()
     
-    # Initialize components
-    camera = CameraNode()
-    detector = DetectionNode(model="yolov8n.pt", conf=0.5)
-    spatial = SpatialAnalysis()
+    def _setup_tts(self):
+        """Initialize TTS engine"""
+        try:
+            self.engine = pyttsx3.init()
+            self.engine.setProperty('rate', 150)
+            self.engine.setProperty('volume', 0.9)
+            print("✅ TTS engine initialized")
+        except Exception as e:
+            print(f"❌ TTS initialization failed: {e}")
     
-    # Initialize text-to-speech engine with better settings
-    try:
-        engine = pyttsx3.init()
-        # Set speech rate (slower = more clear)
-        engine.setProperty('rate', 150)
-        # Set volume (0.0 to 1.0)
-        engine.setProperty('volume', 0.9)
-        print("TTS engine initialized successfully")
-    except Exception as e:
-        print(f"TTS initialization failed: {e}")
-        engine = None
+    def _start_speech_worker(self):
+        """Start background speech worker"""
+        speech_thread = threading.Thread(target=self._speech_worker, daemon=True)
+        speech_thread.start()
     
-    spoken_ids = set()  # to avoid repeated announcements
-    
-    # Speech queue system to prevent overlapping
-    speech_queue = Queue()
-    is_speaking = False
-    
-    def speech_worker():
-        """Background thread to handle speech queue"""
-        nonlocal is_speaking
+    def _speech_worker(self):
+        """Background thread for legacy speech queue"""
         while True:
             try:
-                announcement = speech_queue.get(timeout=1)
-                if announcement is None:  # Shutdown signal
+                announcement = self.speech_queue.get(timeout=1)
+                if announcement is None:
                     break
-                    
-                is_speaking = True
-                print(f"🔊 Speaking: {announcement}")
                 
-                # Use Windows SAPI TTS (synchronous to prevent overlap)
+                self.is_speaking = True
+                print(f"🔊 Legacy Speech: {announcement}")
+                
+                # Use Windows SAPI for compatibility
                 import os
                 clean_announcement = announcement.replace("'", "''")
                 cmd = f'powershell -Command "Add-Type -AssemblyName System.Speech; $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer; $synth.Rate = 0; $synth.Volume = 100; $synth.Speak(\'{clean_announcement}\')"'
                 os.system(cmd)
                 
-                is_speaking = False
-                print("✅ Speech completed")
-                speech_queue.task_done()
+                self.is_speaking = False
+                self.speech_queue.task_done()
                 
             except:
-                is_speaking = False
+                self.is_speaking = False
                 continue
     
-    # Start speech worker thread
-    speech_thread = threading.Thread(target=speech_worker, daemon=True)
-    speech_thread.start()
-
-    for frame_data in camera.stream():
-        frame = frame_data["frame"]  # Extract frame from dictionary
-        frame_height, frame_width = frame.shape[:2]
-
-        # Get detections using the DetectionNode class
-        detections = detector.detect(frame)
-
+    def start_navigation(self, start_coords, end_coords):
+        """
+        🗺️ Start integrated vision + navigation with obstacle detection
+        """
+        print(f"🚀 Starting INTEGRATED navigation from {start_coords} to {end_coords}")
+        print("🔴 SAFETY MODE: Obstacle warnings will override navigation instructions")
+        
+        success = self.integrated_system.start_integrated_navigation(start_coords, end_coords)
+        if success:
+            self.navigation_active = True
+            print("✅ Navigation started with obstacle detection")
+        else:
+            print("❌ Failed to start navigation")
+        return success
+    
+    def stop_navigation(self):
+        """Stop navigation system"""
+        if self.navigation_active:
+            self.integrated_system.stop_navigation()
+            self.navigation_active = False
+            print("🛑 Navigation stopped")
+    
+    def run(self):
+        """
+        🧩 MAIN INTEGRATION LOOP: Vision processing with safety priority
+        """
+        self.running = True
+        print("=" * 60)
+        print("🚀 VISION ASSISTANT WITH INTEGRATED NAVIGATION")
+        print("=" * 60)
+        print("🔴 SAFETY PRIORITY: Obstacle warnings override navigation")
+        print("🗺️ Navigation: Provides turn-by-turn directions when safe")
+        print("👁️ Vision: Detects and announces objects with spatial awareness")
+        print("Press 'q' to quit, 'n' to toggle navigation mode")
+        print("-" * 60)
+        
+        for frame_data in self.camera.stream():
+            if not self.running:
+                break
+            
+            frame = frame_data["frame"]
+            
+            if self.navigation_active:
+                # 🧩 INTEGRATED MODE: Vision + Navigation with Safety Priority
+                detections = self.integrated_system.process_vision_frame(frame)
+                annotated_frame = self._draw_safety_detections(frame, detections)
+                
+                # Display mode indicator
+                cv2.putText(annotated_frame, "NAVIGATION MODE - SAFETY PRIORITY", 
+                           (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                
+            else:
+                # 🔍 DETECTION ONLY MODE: Legacy object detection
+                detections = self.integrated_system.detection_node.detect(frame)
+                annotated_frame = self._process_legacy_detections(frame, detections)
+                
+                # Display mode indicator
+                cv2.putText(annotated_frame, "DETECTION ONLY MODE", 
+                           (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            
+            # Show frame
+            cv2.imshow("Vision Assistant - 'q'=quit, 'n'=navigation", annotated_frame)
+            
+            # Handle key presses
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('q'):
+                print("Vision Assistant stopped by user")
+                break
+            elif key == ord('n'):
+                self._toggle_navigation_mode()
+        
+        self.stop()
+    
+    def _toggle_navigation_mode(self):
+        """Toggle between detection-only and navigation modes"""
+        if self.navigation_active:
+            self.stop_navigation()
+        else:
+            # Example coordinates - in real use, get from GPS or user input
+            start_coords = (37.7749, -122.4194)  # San Francisco
+            end_coords = (37.7849, -122.4094)    # Nearby location
+            self.start_navigation(start_coords, end_coords)
+    
+    def _draw_safety_detections(self, frame, detections):
+        """
+        🔴 Draw detections with safety color coding for navigation mode
+        """
         annotated_frame = frame.copy()
-
-        for det in detections:
-            box = det["box"]
-            label = det["label"]
-            track_id = det["id"]
-            conf = det["conf"]
-
+        
+        for detection in detections:
+            obj_id = detection['id']
+            label = detection['label']
+            box = detection['box']
+            position = detection.get('position', 'unknown')
+            distance = detection.get('distance', 0)
+            
+            # 🔴 SAFETY COLOR CODING
+            if position == 'center' and distance < 3.0:  # DANGER_THRESHOLD
+                color = (0, 0, 255)  # Red - DANGEROUS
+                thickness = 4
+                safety_status = "DANGER"
+            elif distance < 3.0:
+                color = (0, 255, 255)  # Yellow - CAUTION
+                thickness = 3
+                safety_status = "CAUTION"
+            else:
+                color = (0, 255, 0)  # Green - SAFE
+                thickness = 2
+                safety_status = "SAFE"
+            
+            # Draw detection box
+            x1, y1, x2, y2 = box
+            cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, thickness)
+            
+            # Safety label
+            safety_text = f"{label} ID:{obj_id} ({position}, {distance:.1f}m) [{safety_status}]"
+            cv2.putText(annotated_frame, safety_text, (x1, y1-10), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+        
+        return annotated_frame
+    
+    def _process_legacy_detections(self, frame, detections):
+        """
+        👁️ Process detections in legacy mode (detection only, no navigation)
+        """
+        annotated_frame = frame.copy()
+        frame_height, frame_width = frame.shape[:2]
+        
+        for detection in detections:
+            obj_id = detection['id']
+            label = detection['label']
+            box = detection['box']
+            conf = detection.get('conf', 0)
+            
             # Spatial analysis
-            position = spatial.classify_position(box, frame_width)
-            distance = spatial.estimate_distance(box)
-
-            det["position"] = position
-            det["distance"] = distance
-
-            #  Announce only once per unique object
-            if track_id not in spoken_ids:
-                # Create full announcement with spatial information
+            position = self.integrated_system.spatial_analysis.classify_position(box, frame_width)
+            distance = self.integrated_system.spatial_analysis.estimate_distance(box)
+            
+            # Announce only once per unique object (legacy behavior)
+            if obj_id not in self.spoken_ids:
                 announcement = f"{label} on your {position}"
                 if distance:
-                    announcement += f", distance {distance} units"
+                    announcement += f", distance {distance:.1f} meters"
                 
-                print(f"QUEUING: {announcement}")  # Debug print
+                print(f"📝 QUEUING: {announcement}")
                 
-                # Add to speech queue (prevents overlapping)
-                if not speech_queue.full():
-                    speech_queue.put(announcement)
-                    print("📝 Added to speech queue")
-                else:
-                    print("⚠️ Speech queue full, skipping")
+                if not self.speech_queue.full():
+                    self.speech_queue.put(announcement)
                 
-                spoken_ids.add(track_id)
-
-            # Draw bounding box and info
+                self.spoken_ids.add(obj_id)
+            
+            # Draw detection
             x1, y1, x2, y2 = box
             cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
             
-            # Create display text
-            display_text = f"{label} ID:{track_id} {position}"
-            if distance:
-                display_text += f" {distance}"
-            
-            cv2.putText(
-                annotated_frame,
-                display_text,
-                (x1, y1 - 10),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.5,
-                (0, 255, 0),
-                2
-            )
+            display_text = f"{label} ID:{obj_id} {position} {distance:.1f}m"
+            cv2.putText(annotated_frame, display_text, (x1, y1-10), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        
+        return annotated_frame
+    
+    def stop(self):
+        """Stop the vision assistant"""
+        self.running = False
+        
+        # Stop navigation if active
+        if self.navigation_active:
+            self.stop_navigation()
+        
+        # Stop speech thread
+        self.speech_queue.put(None)
+        
+        # Cleanup
+        self.camera.release()
+        cv2.destroyAllWindows()
+        print("✅ Vision Assistant stopped")
 
-        # Show video frame (MOVED OUTSIDE the detection loop)
-        cv2.imshow("Vision Assistant - Press 'q' to quit", annotated_frame)
 
-        # Check for quit key (MOVED OUTSIDE the detection loop)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            print("Vision Assistant stopped by user")
-            break
-
-    # Cleanup
-    speech_queue.put(None)  # Signal speech thread to stop
-    camera.release()
-    cv2.destroyAllWindows()
+def main():
+    """Main function with integrated vision + navigation"""
+    assistant = VisionAssistant()
+    
+    try:
+        assistant.run()
+    except KeyboardInterrupt:
+        print("\n🛑 Interrupted by user")
+        assistant.stop()
 
 
 if __name__ == "__main__":
