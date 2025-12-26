@@ -1,87 +1,104 @@
-import React, { useState } from 'react';
-import axios from 'axios';
-import './App.css';
+import React from "react";
+import "./App.css";
+
+// Custom Hooks
+import {
+  useAccessibility,
+  useVisionAssistant,
+  useNavigation,
+  useKeyboardShortcuts
+} from "./hooks";
+
+// Components
+import {
+  AccessibilityAnnouncer,
+  Header,
+  StatusSection,
+  VisionControls,
+  NavigationSection,
+  InfoSection
+} from "./components";
 
 function App() {
-  const [isRunning, setIsRunning] = useState(false);
-  const [status, setStatus] = useState('Ready to start');
-  const [loading, setLoading] = useState(false);
+  // Custom hooks for functionality
+  const { announcements, announcementRef, speak } = useAccessibility();
+  
+  const {
+    isRunning,
+    loading: visionLoading,
+    status,
+    handleToggleVision
+  } = useVisionAssistant(speak);
 
-  const handleToggle = async () => {
-    setLoading(true);
-    
-    try {
-      if (!isRunning) {
-        // Start the vision assistant
-        setStatus('Starting vision assistant...');
-        const response = await axios.post('/api/start');
-        
-        if (response.data.success) {
-          setIsRunning(true);
-          setStatus('Vision Assistant Running - Camera Active');
-        } else {
-          setStatus('Failed to start: ' + response.data.message);
-        }
-      } else {
-        // Stop the vision assistant
-        setStatus('Stopping vision assistant...');
-        const response = await axios.post('/api/stop');
-        
-        if (response.data.success) {
-          setIsRunning(false);
-          setStatus('Vision Assistant Stopped');
-        } else {
-          setStatus('Failed to stop: ' + response.data.message);
-        }
-      }
-    } catch (error) {
-      console.error('Error:', error);
-      setStatus('Error: ' + (error.response?.data?.message || error.message));
+  const {
+    navigationActive,
+    setNavigationActive,
+    startLocation,
+    setStartLocation,
+    destination,
+    setDestination,
+    savedLocations,
+    loading: navigationLoading,
+    handleStartNavigation,
+    handleStopNavigation,
+    handleSaveLocation
+  } = useNavigation(speak);
+
+  // Handle vision stop to also stop navigation
+  const handleVisionToggle = async () => {
+    if (isRunning && navigationActive) {
+      setNavigationActive(false);
     }
-    
-    setLoading(false);
+    await handleToggleVision();
   };
 
+  // Keyboard shortcuts
+  useKeyboardShortcuts(
+    isRunning,
+    navigationActive,
+    handleVisionToggle,
+    handleStopNavigation,
+    handleSaveLocation
+  );
+
+  const loading = visionLoading || navigationLoading;
+
   return (
-    <div className="App">
+    <div className="App" role="main">
+      <AccessibilityAnnouncer 
+        announcements={announcements}
+        announcementRef={announcementRef}
+      />
+
       <header className="App-header">
-        <h1>🎯 VISTA</h1>
-        <h2>Vision Assistant for Blind People</h2>
-        
-        <div className="status-container">
-          <div className={`status-indicator ${isRunning ? 'running' : 'stopped'}`}>
-            {isRunning ? '🟢' : '🔴'}
-          </div>
-          <p className="status-text">{status}</p>
-        </div>
+        <Header />
 
-        <button 
-          className={`main-button ${isRunning ? 'stop' : 'start'} ${loading ? 'loading' : ''}`}
-          onClick={handleToggle}
-          disabled={loading}
-        >
-          {loading ? (
-            <div className="spinner"></div>
-          ) : (
-            <>
-              {isRunning ? '⏹️ STOP' : '▶️ START'}
-              <span className="button-subtitle">
-                {isRunning ? 'Stop Camera & Detection' : 'Start Camera & Detection'}
-              </span>
-            </>
-          )}
-        </button>
+        <StatusSection 
+          isRunning={isRunning}
+          status={status}
+        />
 
-        <div className="info-section">
-          <h3>How it works:</h3>
-          <ul>
-            <li>🎥 Camera captures live video</li>
-            <li>🤖 AI detects objects in real-time</li>
-            <li>📍 Provides spatial location (left/center/right)</li>
-            <li>📏 Estimates distance to objects</li>
-            <li>🔊 Announces objects with text-to-speech</li>
-          </ul>
-        </div>
+        <VisionControls
+          isRunning={isRunning}
+          loading={loading}
+          handleToggleVision={handleVisionToggle}
+        />
+
+        <NavigationSection
+          isRunning={isRunning}
+          navigationActive={navigationActive}
+          startLocation={startLocation}
+          setStartLocation={setStartLocation}
+          destination={destination}
+          setDestination={setDestination}
+          savedLocations={savedLocations}
+          loading={loading}
+          handleStartNavigation={handleStartNavigation}
+          handleStopNavigation={handleStopNavigation}
+          handleSaveLocation={handleSaveLocation}
+        />
+
+        <InfoSection />
       </header>
     </div>
   );
