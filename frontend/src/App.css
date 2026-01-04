@@ -436,3 +436,175 @@ select:hover {
     color: black;
   }
 }
+/* Camera and Detection Styles */
+
+/* Camera Section */
+.camera-section {
+  margin: 2rem 0;
+  padding: 2rem;
+  background-color: #1a1a2e;
+  border: 3px solid #00ff00;
+  border-radius: 12px;
+}
+
+.camera-placeholder {
+  padding: 3rem;
+  background-color: #2a2a3e;
+  border-radius: 8px;
+  border: 2px dashed #00ff00;
+  font-size: 1.3rem;
+  color: #ccc;
+}
+
+video {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  border: 3px solid #00ff00;
+  background-color: #000;
+}
+
+/* Detections Section */
+.detections-section {
+  margin: 2rem 0;
+  padding: 2rem;
+  background-color: #1a1a2e;
+  border: 3px solid #ffff00;
+  border-radius: 12px;
+}
+
+.detections-list {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+  text-align: left;
+}
+
+.detection-item {
+  background-color: #2a2a3e;
+  margin: 1rem 0;
+  padding: 1.5rem;
+  border-radius: 8px;
+  border-left: 6px solid #00ff00;
+  font-size: 1.2rem;
+  transition: all 0.3s ease;
+}
+
+.detection-item:hover {
+  background-color: #3a3a4e;
+  transform: translateX(5px);
+}
+
+.detection-item strong {
+  color: #00ff00;
+  font-size: 1.4rem;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.detection-id {
+  color: #ccc;
+  font-size: 1rem;
+  margin-left: 0.5rem;
+}
+
+.detection-confidence {
+  float: right;
+  color: #ffff00;
+  font-weight: bold;
+  font-size: 1.1rem;
+  background-color: rgba(255, 255, 0, 0.1);
+  padding: 0.3rem 0.8rem;
+  border-radius: 4px;
+  border: 1px solid #ffff00;
+}
+
+/* No detections message */
+.detections-section p {
+  font-size: 1.3rem;
+  color: #ccc;
+  text-align: center;
+  padding: 2rem;
+  font-style: italic;
+}
+
+/* Enhanced responsive design for camera features */
+@media (max-width: 768px) {
+  .camera-section,
+  .detections-section {
+    padding: 1rem;
+    margin: 1rem 0;
+  }
+  
+  .camera-placeholder {
+    padding: 2rem;
+    font-size: 1.1rem;
+  }
+  
+  .detection-item {
+    padding: 1rem;
+    font-size: 1.1rem;
+  }
+  
+  .detection-item strong {
+    font-size: 1.2rem;
+  }
+  
+  .detection-confidence {
+    float: none;
+    display: block;
+    margin-top: 0.5rem;
+    text-align: center;
+  }
+}
+
+/* Focus styles for detection items (keyboard navigation) */
+.detection-item:focus {
+  outline: 4px solid #ffff00;
+  outline-offset: 4px;
+  box-shadow: 0 0 0 8px rgba(255, 255, 0, 0.3);
+}
+
+/* Animation for new detections */
+@keyframes detection-appear {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.detection-item {
+  animation: detection-appear 0.5s ease-out;
+}
+
+/* High contrast mode for camera features */
+@media (prefers-contrast: high) {
+  .camera-section,
+  .detections-section {
+    border-width: 4px;
+  }
+  
+  video {
+    border-width: 4px;
+  }
+  
+  .detection-item {
+    border-left-width: 8px;
+  }
+}
+
+/* Reduced motion for camera features */
+@media (prefers-reduced-motion: reduce) {
+  .detection-item {
+    animation: none;
+    transition: none;
+  }
+  
+  .detection-item:hover {
+    transform: none;
+  }
+}

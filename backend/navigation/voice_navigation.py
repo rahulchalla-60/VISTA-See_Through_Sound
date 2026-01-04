@@ -2,14 +2,14 @@ import pyttsx3
 import time
 from typing import Tuple
 
-from navigate import get_instructions, calculate_distance
-from offline_navigation import OfflineNavigation
+from navigation.navigate import get_instructions, calculate_distance
+from navigation.offline_voice_saver import OfflineVoiceLocation
 
 
 class VoiceNavigator:
     def __init__(self):
         self.tts = pyttsx3.init()
-        self.nav = OfflineNavigation()
+        self.nav = OfflineVoiceLocation()
         self._setup_voice()
 
     def _setup_voice(self):
@@ -81,7 +81,7 @@ class VoiceNavigator:
     
     def list_saved_places(self):
         """Speak available saved locations"""
-        locations = list(self.nav.saved_locations.keys())
+        locations = list(self.nav.locations.keys())
         if locations:
             places = ", ".join(locations)
             self.speak(f"Available locations are: {places}")

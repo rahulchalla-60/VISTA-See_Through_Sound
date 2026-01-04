@@ -122,6 +122,23 @@ class OfflineVoiceLocation:
         else:
             self.speak(f"{name} not found.")
 
+    def get_location_coords(self, location_name: str):
+        """Get coordinates for a saved location (for navigation integration)"""
+        location_name = location_name.lower().strip()
+        
+        # Try exact match first
+        key = location_name.replace(" ", "_")
+        if key in self.locations:
+            loc = self.locations[key]
+            return (loc['lat'], loc['lon'])
+        
+        # Try partial match
+        for name, data in self.locations.items():
+            if location_name in name.lower() or name.lower() in location_name:
+                return (data['lat'], data['lon'])
+        
+        return None
+
     # -------------------- Simple Loop --------------------
 
     def run(self):

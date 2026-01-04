@@ -3,17 +3,26 @@ import pyttsx3
 import time
 import threading
 from queue import Queue
-
-from nodes.camera_node import CameraNode
-from integrated_vision_navigation import IntegratedVisionNavigation
+import socketio
+import numpy as np
+from ultralytics import YOLO
+from yolox.tracker.byte_tracker import BYTETracker
+import uvicorn
+import asyncio
 
 class VisionAssistant:
     def __init__(self):
-        # 🧩 NEW: Integrated vision + navigation system
-        self.integrated_system = IntegratedVisionNavigation()
-        self.camera = CameraNode()
+        # Socket.IO Detection System
+        self.sio = socketio.AsyncServer(cors_allowed_origins="*")
+        self.app = socketio.ASGIApp(self.sio)
+        self.detection_model = YOLO("yolo11n.pt")
+        self.tracker = BYTETracker(
+            track_thresh=0.5,
+            match_thresh=0.8,
+            track_buffer=30
+        )
         
-        # Legacy TTS for compatibility
+        # TTS for voice announcements
         self.engine = None
         self.speech_queue = Queue()
         self.is_speaking = False
@@ -21,10 +30,123 @@ class VisionAssistant:
         
         # Control flags
         self.running = False
-        self.navigation_active = False
+        self.web_mode = False  # Flag for web interface mode
         
         self._setup_tts()
         self._start_speech_worker()
+        self._setup_socketio_handlers()
+    
+    def _setup_socketio_handlers(self):
+        """Setup Socket.IO event handlers for web interface"""
+        
+        @self.sio.event
+        async def connect(sid, environ):
+            print(f"🌐 Web client connected: {sid}")
+            self.web_mode = True
+        
+        @self.sio.event
+        async def disconnect(sid):
+            print(f"🌐 Web client disconnected: {sid}")
+            self.web_mode = False
+        
+        @self.sio.event
+        async def frame(sid, data):
+            """Process frame from web interface"""
+            try:
+                # Convert blob → image
+                np_img = np.frombuffer(data, np.uint8)
+                frame = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
+                
+                if frame is None:
+                    return
+                
+                # YOLO detection
+                results = self.detection_model(frame, conf=0.5, verbose=False)[0]
+                
+                detections = []
+                class_names = []
+                
+                for box in results.boxes:
+                    x1, y1, x2, y2 = box.xyxy[0].tolist()
+                    conf = float(box.conf[0])
+                    cls = int(box.cls[0])
+                    class_name = results.names.get(cls, "unknown")
+                    
+                    detections.append([x1, y1, x2 - x1, y2 - y1, conf, cls])
+                    class_names.append(class_name)
+                
+                # ByteTrack expects numpy array
+                dets = np.array(detections) if detections else np.empty((0, 6))
+                
+                tracks = self.tracker.update(
+                    dets[:, :5] if len(dets) else np.empty((0, 5)),
+                    frame.shape[:2],
+                    frame.shape[:2]
+                )
+                
+                tracked_objects = []
+                for i, t in enumerate(tracks):
+                    x1, y1, x2, y2 = map(int, t.tlbr)
+                    
+                    # Match track with detection to get class name
+                    class_name = "unknown"
+                    confidence = 0.0
+                    
+                    if i < len(class_names):
+                        class_name = class_names[i]
+                    if i < len(detections):
+                        confidence = detections[i][4]
+                    
+                    tracked_objects.append({
+                        "track_id": int(t.track_id),
+                        "bbox": [x1, y1, x2, y2],
+                        "class_name": class_name,
+                        "confidence": confidence
+                    })
+                
+                # Send detections to frontend
+                await self.sio.emit("detections", tracked_objects)
+                
+                # Optional: Announce objects for accessibility
+                if tracked_objects and not self.is_speaking:
+                    self._announce_web_detections(tracked_objects, frame.shape)
+                
+            except Exception as e:
+                print(f"❌ Error processing web frame: {e}")
+    
+    def _announce_web_detections(self, tracked_objects, frame_shape):
+        """Announce detected objects for web interface accessibility"""
+        frame_height, frame_width = frame_shape[:2]
+        
+        for obj in tracked_objects:
+            track_id = obj["track_id"]
+            class_name = obj["class_name"]
+            bbox = obj["bbox"]
+            
+            # Skip if already announced
+            if track_id in self.spoken_ids:
+                continue
+            
+            # Determine position
+            x1, y1, x2, y2 = bbox
+            center_x = (x1 + x2) / 2
+            
+            if center_x < frame_width * 0.33:
+                position = "left"
+            elif center_x > frame_width * 0.66:
+                position = "right"
+            else:
+                position = "center"
+            
+            # Estimate distance (simple heuristic)
+            box_height = y2 - y1
+            distance = max(1.0, 100.0 / (box_height + 1))  # Simple distance estimation
+            
+            announcement = f"{class_name} detected on your {position}, approximately {distance:.1f} meters away"
+            
+            if not self.speech_queue.full():
+                self.speech_queue.put(announcement)
+                self.spoken_ids.add(track_id)
     
     def _setup_tts(self):
         """Initialize TTS engine"""
@@ -42,7 +164,7 @@ class VisionAssistant:
         speech_thread.start()
     
     def _speech_worker(self):
-        """Background thread for legacy speech queue"""
+        """Background thread for speech queue"""
         while True:
             try:
                 announcement = self.speech_queue.get(timeout=1)
@@ -50,7 +172,7 @@ class VisionAssistant:
                     break
                 
                 self.is_speaking = True
-                print(f"🔊 Legacy Speech: {announcement}")
+                print(f"🔊 Speech: {announcement}")
                 
                 # Use Windows SAPI for compatibility
                 import os
@@ -65,192 +187,40 @@ class VisionAssistant:
                 self.is_speaking = False
                 continue
     
-    def start_navigation(self, start_coords, end_coords):
-        """
-        🗺️ Start integrated vision + navigation with obstacle detection
-        """
-        print(f"🚀 Starting INTEGRATED navigation from {start_coords} to {end_coords}")
-        print("🔴 SAFETY MODE: Obstacle warnings will override navigation instructions")
+    def run_web_server(self, host="0.0.0.0", port=8000):
+        """Run web server for frontend connection"""
+        print(f"🌐 Starting Vision Assistant Web Server on {host}:{port}")
+        print("🔗 Connect your frontend to this server")
+        print("Press Ctrl+C to stop")
         
-        success = self.integrated_system.start_integrated_navigation(start_coords, end_coords)
-        if success:
-            self.navigation_active = True
-            print("✅ Navigation started with obstacle detection")
-        else:
-            print("❌ Failed to start navigation")
-        return success
-    
-    def stop_navigation(self):
-        """Stop navigation system"""
-        if self.navigation_active:
-            self.integrated_system.stop_navigation()
-            self.navigation_active = False
-            print("🛑 Navigation stopped")
-    
-    def run(self):
-        """
-        🧩 MAIN INTEGRATION LOOP: Vision processing with safety priority
-        """
-        self.running = True
-        print("=" * 60)
-        print("🚀 VISION ASSISTANT WITH INTEGRATED NAVIGATION")
-        print("=" * 60)
-        print("🔴 SAFETY PRIORITY: Obstacle warnings override navigation")
-        print("🗺️ Navigation: Provides turn-by-turn directions when safe")
-        print("👁️ Vision: Detects and announces objects with spatial awareness")
-        print("Press 'q' to quit, 'n' to toggle navigation mode")
-        print("-" * 60)
-        
-        for frame_data in self.camera.stream():
-            if not self.running:
-                break
-            
-            frame = frame_data["frame"]
-            
-            if self.navigation_active:
-                # 🧩 INTEGRATED MODE: Vision + Navigation with Safety Priority
-                detections = self.integrated_system.process_vision_frame(frame)
-                annotated_frame = self._draw_safety_detections(frame, detections)
-                
-                # Display mode indicator
-                cv2.putText(annotated_frame, "NAVIGATION MODE - SAFETY PRIORITY", 
-                           (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-                
-            else:
-                # 🔍 DETECTION ONLY MODE: Legacy object detection
-                detections = self.integrated_system.detection_node.detect(frame)
-                annotated_frame = self._process_legacy_detections(frame, detections)
-                
-                # Display mode indicator
-                cv2.putText(annotated_frame, "DETECTION ONLY MODE", 
-                           (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-            
-            # Show frame
-            cv2.imshow("Vision Assistant - 'q'=quit, 'n'=navigation", annotated_frame)
-            
-            # Handle key presses
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord('q'):
-                print("Vision Assistant stopped by user")
-                break
-            elif key == ord('n'):
-                self._toggle_navigation_mode()
-        
-        self.stop()
-    
-    def _toggle_navigation_mode(self):
-        """Toggle between detection-only and navigation modes"""
-        if self.navigation_active:
-            self.stop_navigation()
-        else:
-            # Example coordinates - in real use, get from GPS or user input
-            start_coords = (37.7749, -122.4194)  # San Francisco
-            end_coords = (37.7849, -122.4094)    # Nearby location
-            self.start_navigation(start_coords, end_coords)
-    
-    def _draw_safety_detections(self, frame, detections):
-        """
-        🔴 Draw detections with safety color coding for navigation mode
-        """
-        annotated_frame = frame.copy()
-        
-        for detection in detections:
-            obj_id = detection['id']
-            label = detection['label']
-            box = detection['box']
-            position = detection.get('position', 'unknown')
-            distance = detection.get('distance', 0)
-            
-            # 🔴 SAFETY COLOR CODING
-            if position == 'center' and distance < 3.0:  # DANGER_THRESHOLD
-                color = (0, 0, 255)  # Red - DANGEROUS
-                thickness = 4
-                safety_status = "DANGER"
-            elif distance < 3.0:
-                color = (0, 255, 255)  # Yellow - CAUTION
-                thickness = 3
-                safety_status = "CAUTION"
-            else:
-                color = (0, 255, 0)  # Green - SAFE
-                thickness = 2
-                safety_status = "SAFE"
-            
-            # Draw detection box
-            x1, y1, x2, y2 = box
-            cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), color, thickness)
-            
-            # Safety label
-            safety_text = f"{label} ID:{obj_id} ({position}, {distance:.1f}m) [{safety_status}]"
-            cv2.putText(annotated_frame, safety_text, (x1, y1-10), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-        
-        return annotated_frame
-    
-    def _process_legacy_detections(self, frame, detections):
-        """
-        👁️ Process detections in legacy mode (detection only, no navigation)
-        """
-        annotated_frame = frame.copy()
-        frame_height, frame_width = frame.shape[:2]
-        
-        for detection in detections:
-            obj_id = detection['id']
-            label = detection['label']
-            box = detection['box']
-            conf = detection.get('conf', 0)
-            
-            # Spatial analysis
-            position = self.integrated_system.spatial_analysis.classify_position(box, frame_width)
-            distance = self.integrated_system.spatial_analysis.estimate_distance(box)
-            
-            # Announce only once per unique object (legacy behavior)
-            if obj_id not in self.spoken_ids:
-                announcement = f"{label} on your {position}"
-                if distance:
-                    announcement += f", distance {distance:.1f} meters"
-                
-                print(f"📝 QUEUING: {announcement}")
-                
-                if not self.speech_queue.full():
-                    self.speech_queue.put(announcement)
-                
-                self.spoken_ids.add(obj_id)
-            
-            # Draw detection
-            x1, y1, x2, y2 = box
-            cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            
-            display_text = f"{label} ID:{obj_id} {position} {distance:.1f}m"
-            cv2.putText(annotated_frame, display_text, (x1, y1-10), 
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-        
-        return annotated_frame
+        try:
+            uvicorn.run(self.app, host=host, port=port, log_level="info")
+        except KeyboardInterrupt:
+            print("\n🛑 Web server stopped by user")
+        finally:
+            self.stop()
     
     def stop(self):
         """Stop the vision assistant"""
         self.running = False
         
-        # Stop navigation if active
-        if self.navigation_active:
-            self.stop_navigation()
-        
         # Stop speech thread
         self.speech_queue.put(None)
         
-        # Cleanup
-        self.camera.release()
-        cv2.destroyAllWindows()
         print("✅ Vision Assistant stopped")
 
 
 def main():
-    """Main function with integrated vision + navigation"""
+    """Main function for Vision Assistant"""
+    import sys
+    
     assistant = VisionAssistant()
     
+    # Run web server mode for frontend connection
     try:
-        assistant.run()
+        assistant.run_web_server()
     except KeyboardInterrupt:
-        print("\n🛑 Interrupted by user")
+        print("\n🛑 Web server interrupted by user")
         assistant.stop()
 
 
