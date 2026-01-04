@@ -1,1 +1,0 @@
-# Navigation package for VISTA Vision Assistant
