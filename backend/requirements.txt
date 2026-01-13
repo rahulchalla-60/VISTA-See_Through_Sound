@@ -4,7 +4,7 @@ ultralytics>=8.0.0
 opencv-python>=4.8.0
 torch>=2.0.0
 torchvision>=0.15.0
-yolox>=0.3.0
+
 
 # Real-time Communication
 python-socketio>=5.8.0
