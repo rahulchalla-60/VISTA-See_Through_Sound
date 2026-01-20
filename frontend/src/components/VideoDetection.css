@@ -2,11 +2,12 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2rem;
+  gap: 1.5rem;
   padding: 2rem;
   border: 1px solid #e0e0e0;
   border-radius: 12px;
   background-color: #fafafa;
+  max-width: 800px;
 }
 
 .video-detection h2 {
@@ -18,7 +19,6 @@
 .video-container {
   display: flex;
   justify-content: center;
-  margin: 1rem 0;
 }
 
 .video-stream {
@@ -29,12 +29,6 @@
   background-color: #000;
 }
 
-.controls {
-  display: flex;
-  justify-content: center;
-  margin: 1rem 0;
-}
-
 .main-btn {
   padding: 16px 32px;
   font-size: 18px;
@@ -43,7 +37,7 @@
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s ease;
-  min-width: 160px;
+  min-width: 180px;
 }
 
 .main-btn.start {
@@ -75,4 +69,33 @@
   background-color: #fff;
   border-radius: 6px;
   border: 1px solid #ddd;
+}
+
+.objects-found {
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 1rem;
+  width: 100%;
+  max-width: 400px;
+}
+
+.objects-found h3 {
+  margin: 0 0 1rem 0;
+  color: #333;
+  font-size: 18px;
+}
+
+.objects-found ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.objects-found li {
+  padding: 8px 12px;
+  margin: 4px 0;
+  background-color: #f0f8ff;
+  border-radius: 4px;
+  border-left: 4px solid #4CAF50;
 }
